@@ -1,0 +1,144 @@
+/*
+ 
+  Note:
+  - Must be executed in SQLCMD mode
+  - Replace:
+      - [SQL Service account]
+      - [AG_Name]
+  - Ensure ports and DNS names are correct for your environment
+
+  Requirements:
+  - SQL Server 2016+
+  - sysadmin privilege on all involved replicas
+  - All nodes should be reachable over the network
+*/
+
+
+-- YOU MUST EXECUTE THIS SCRIPT IN SQLCMD MODE
+
+
+
+
+:Connect Primary
+
+use [master]
+
+GO
+
+GRANT CONNECT ON ENDPOINT::[Hadr_endpoint] TO [SQL Service account]
+
+GO
+
+use [master]
+
+GO
+
+GRANT CONNECT ON ENDPOINT::[Hadr_endpoint] TO [NT SERVICE\MSSQLSERVER]
+
+GO
+
+:Connect Secondary
+
+use [master]
+
+GO
+
+GRANT CONNECT ON ENDPOINT::[Hadr_endpoint] TO [SQL Service account]
+
+GO
+
+use [master]
+
+GO
+
+GRANT CONNECT ON ENDPOINT::[Hadr_endpoint] TO [NT SERVICE\MSSQLSERVER]
+
+GO
+
+:Connect DR_Secondary
+
+use [master]
+
+GO
+
+GRANT CONNECT ON ENDPOINT::[Hadr_endpoint] TO [SQL Service account]
+
+GO
+
+use [master]
+
+GO
+
+GRANT CONNECT ON ENDPOINT::[Hadr_endpoint] TO [NT SERVICE\MSSQLSERVER]
+
+GO
+
+
+
+
+
+
+:Connect Node name that you need add it
+
+USE [master]
+
+GO
+
+CREATE ENDPOINT [Hadr_endpoint] 
+	AS TCP (LISTENER_PORT = 5022)
+	FOR DATA_MIRRORING (ROLE = ALL, ENCRYPTION = REQUIRED ALGORITHM AES)
+
+GO
+
+IF (SELECT state FROM sys.endpoints WHERE name = N'Hadr_endpoint') <> 0
+BEGIN
+	ALTER ENDPOINT [Hadr_endpoint] STATE = STARTED
+END
+
+
+GO
+
+use [master]
+
+GO
+
+GRANT CONNECT ON ENDPOINT::[Hadr_endpoint] TO [SQL Service account]
+
+GO
+
+:Connect Node name that you need add it
+
+IF EXISTS(SELECT * FROM sys.server_event_sessions WHERE name='AlwaysOn_health')
+BEGIN
+  ALTER EVENT SESSION [AlwaysOn_health] ON SERVER WITH (STARTUP_STATE=ON);
+END
+IF NOT EXISTS(SELECT * FROM sys.dm_xe_sessions WHERE name='AlwaysOn_health')
+BEGIN
+  ALTER EVENT SESSION [AlwaysOn_health] ON SERVER STATE=START;
+END
+
+GO
+
+:Connect Primary
+
+USE [master]
+
+GO
+
+ALTER AVAILABILITY GROUP [AG Name]
+ADD REPLICA ON N'Node name that you need add it' WITH (ENDPOINT_URL = N'TCP://Node name that you need add it.mopm.gov.sa:5022', FAILOVER_MODE = MANUAL, AVAILABILITY_MODE = ASYNCHRONOUS_COMMIT, BACKUP_PRIORITY = 50, SEEDING_MODE = AUTOMATIC, SECONDARY_ROLE(ALLOW_CONNECTIONS = NO));
+
+GO
+
+:Connect Node name that you need add it
+
+ALTER AVAILABILITY GROUP [AG Name] JOIN;
+
+GO
+
+ALTER AVAILABILITY GROUP [AG Name]  GRANT CREATE ANY DATABASE;
+
+GO
+
+
+GO
